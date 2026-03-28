@@ -1,0 +1,65 @@
+# -----------------------------------------------------------------------------
+# REQUIRED — Fill in your values
+# -----------------------------------------------------------------------------
+
+# AWS region
+aws_region = "us-east-1"
+
+# Domain — must have a Route 53 hosted zone
+domain_name      = "opensign.example.com"
+route53_zone_id  = "Z0123456789ABCDEFGHIJ"
+
+# Parse Server master key — generate a strong random string
+master_key = "CHANGE_ME_to_a_strong_random_string"
+
+# -----------------------------------------------------------------------------
+# OPTIONAL — Defaults shown
+# -----------------------------------------------------------------------------
+
+# General
+project_name = "opensign"
+environment  = "prod"
+
+# Networking (default: 2 AZs, 10.0.0.0/16)
+# vpc_cidr             = "10.0.0.0/16"
+# availability_zones   = ["us-east-1a", "us-east-1b"]
+# public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+# private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
+
+# App
+app_id   = "opensign"
+app_name = "open_sign_server"
+
+# ECS Server
+# server_cpu           = 512
+# server_memory        = 1024
+# server_desired_count = 1
+# server_image         = ""  # Uses ECR by default
+
+# ECS Client
+# client_cpu           = 256
+# client_memory        = 512
+# client_desired_count = 1
+# client_image         = ""  # Uses ECR by default
+
+# DocumentDB
+# docdb_instance_class = "db.t3.medium"
+# docdb_instance_count = 1
+# docdb_master_username = "opensign"
+
+# Email (uncomment and configure one of these)
+# smtp_enable    = true
+# smtp_host      = "smtp.gmail.com"
+# smtp_port      = 465
+# smtp_user_email = "you@gmail.com"
+# smtp_pass      = "app-password"
+
+# OR Mailgun
+# mailgun_api_key = "key-xxxxx"
+# mailgun_domain  = "mail.example.com"
+# mailgun_sender  = "postmaster@mail.example.com"
+
+# Additional tags
+# additional_tags = {
+#   Team = "platform"
+# }

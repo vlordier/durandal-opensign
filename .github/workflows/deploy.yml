@@ -1,0 +1,143 @@
+name: Build & Deploy OpenSign
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_infra:
+        description: "Also deploy infrastructure changes"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER_NAME }}
+  ECS_SERVER_SERVICE: ${{ secrets.ECS_SERVER_SERVICE }}
+  ECS_CLIENT_SERVICE: ${{ secrets.ECS_CLIENT_SERVICE }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    name: Terraform Plan
+    if: ${{ github.event.inputs.deploy_infra == 'true' || github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        if: ${{ github.event.inputs.deploy_infra == 'true' }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Upload Plan
+        if: ${{ github.event.inputs.deploy_infra != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: tfplan
+          retention-days: 5
+
+  build-and-deploy:
+    name: Build & Deploy
+    needs: [terraform]
+    if: always() && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: OpenSignLabs/OpenSign
+          path: opensign-source
+
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Server Image
+        run: |
+          docker build \
+            -t ${{ env.ECR_REGISTRY }}/opensign/server:latest \
+            -t ${{ env.ECR_REGISTRY }}/opensign/server:${{ github.sha }} \
+            -f opensign-source/apps/OpenSignServer/Dockerhubfile \
+            opensign-source
+
+      - name: Build Client Image
+        run: |
+          docker build \
+            -t ${{ env.ECR_REGISTRY }}/opensign/client:latest \
+            -t ${{ env.ECR_REGISTRY }}/opensign/client:${{ github.sha }} \
+            -f opensign-source/apps/OpenSign/Dockerhubfile \
+            opensign-source
+
+      - name: Push Server Image
+        run: |
+          docker push ${{ env.ECR_REGISTRY }}/opensign/server:latest
+          docker push ${{ env.ECR_REGISTRY }}/opensign/server:${{ github.sha }}
+
+      - name: Push Client Image
+        run: |
+          docker push ${{ env.ECR_REGISTRY }}/opensign/client:latest
+          docker push ${{ env.ECR_REGISTRY }}/opensign/client:${{ github.sha }}
+
+      - name: Deploy Server to ECS
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVER_SERVICE }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Deploy Client to ECS
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_CLIENT_SERVICE }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for Deployments
+        run: |
+          echo "Waiting for server deployment..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVER_SERVICE }} \
+            --region ${{ env.AWS_REGION }}
+          echo "Waiting for client deployment..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_CLIENT_SERVICE }} \
+            --region ${{ env.AWS_REGION }}
+          echo "Deployment complete!"
