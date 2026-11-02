@@ -1,0 +1,24 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REGISTRY
+      - echo Creating ECR repositories if they don't exist...
+      - aws ecr describe-repositories --repository-names $SERVER_REPO || aws ecr create-repository --repository-name $SERVER_REPO
+      - aws ecr describe-repositories --repository-names $CLIENT_REPO || aws ecr create-repository --repository-name $CLIENT_REPO
+  build:
+    commands:
+      - echo Build started on $(date)
+      - echo Building the Docker server image...
+      - docker build -f apps/OpenSignServer/Dockerhubfile -t $ECR_REGISTRY/$SERVER_REPO:latest .
+      - echo Building the Docker client image...
+      - docker build -f apps/OpenSign/Dockerhubfile -t $ECR_REGISTRY/$CLIENT_REPO:latest .
+  post_build:
+    commands:
+      - echo Build completed on $(date)
+      - echo Pushing the Docker server image...
+      - docker push $ECR_REGISTRY/$SERVER_REPO:latest
+      - echo Pushing the Docker client image...
+      - docker push $ECR_REGISTRY/$CLIENT_REPO:latest
