@@ -31,7 +31,7 @@ jobs:
     if: ${{ github.event.inputs.deploy_infra == 'true' || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -68,12 +68,12 @@ jobs:
     if: always() && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: OpenSignLabs/OpenSign
           path: opensign-source
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
